@@ -1,0 +1,5 @@
+# Skip build directories.
+build*/
+
+# Skip files added by Qt Creator.
+CMakeLists.txt.user*
