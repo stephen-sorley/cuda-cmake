@@ -24,10 +24,24 @@
  * THE SOFTWARE.
  * * * * * * * * * * * *
  */
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
+
+#include "test.h"
 
 int main(int argc, char *argv[]) {
-    printf("Workin' hard, or hardly workin'?\n");
+    size_t N = 1<<20;
+    if(argc >= 2) {
+        char *str_end = nullptr;
+        size_t num = strtoll(argv[1], &str_end, 0);
+        if(str_end > argv[1]) {
+            N = num;
+        }
+    }
+
+    std::printf("Workin' hard, or hardly workin'?\n");
+
+    test_add(N);
+
     return EXIT_SUCCESS;
 }
