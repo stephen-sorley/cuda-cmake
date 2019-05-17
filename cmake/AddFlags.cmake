@@ -143,7 +143,6 @@ else()
     if(ADDFLAGS_STRICT_WARNINGS)
         _int_add_flags_compiler(LANGS C CXX FLAGS
             -Wconversion
-            -Wdouble-promotion
             -Wsign-conversion
         )
     else()
