@@ -45,7 +45,7 @@ if(NOT CMAKE_CUDA_COMPILER_VERSION)
 endif()
 
 if(    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
-    # https://docs.nvidia.com/cuda/archive/10.1/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list 
+    # https://docs.nvidia.com/cuda/archive/10.1/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list
     set(arch_list
         30 # Kepler
         50 # Maxwell
@@ -93,7 +93,7 @@ foreach(arch ${arch_list})
     if(arch GREATER "${CUDA_MAX_ARCH}")
         break()
     endif()
-    
+
     if(arch LESS "${CUDA_MAX_ARCH}")
         # If this isn't the newest arch, just compile binary GPU code for it.
         string(APPEND CMAKE_CUDA_FLAGS " -gencode arch=compute_${arch},code=sm_${arch}")
@@ -102,4 +102,10 @@ foreach(arch ${arch_list})
         # that the code will work on GPU arch's newer than our max supported one (uses JIT compilation).
         string(APPEND CMAKE_CUDA_FLAGS " -gencode arch=compute_${arch},code=[compute_${arch},sm_${arch}]")
     endif()
+endforeach()
+
+# Force nvcc to treat headers from CUDA include dir as system headers. If we don't do this, we get tons of
+# spam warnings from CUDA's headers when building with newer GCC or Clang.
+foreach(incdir ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+    string(APPEND CMAKE_CUDA_FLAGS " -isystem \"${incdir}\"")
 endforeach()

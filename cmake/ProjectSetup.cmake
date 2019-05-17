@@ -95,3 +95,7 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "${build_types}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
+list(APPEND CMAKE_PREFIX_PATH
+    /usr/local/cuda # Default cuda install location when using nvidia's Linux .run installer.
+)

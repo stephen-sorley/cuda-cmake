@@ -8,6 +8,13 @@
 # There are a few other functions in here that are used as helpers by the above
 # three, and aren't really intended to be called by the user.
 #
+# This file also contains a list of warning flags that are known to trigger warnings
+# in internal CUDA code that can't be suppressed or fixed:
+#   _int_add_flags_cuda_exclude
+#
+# Any flags in the CUDA exclude list are filtered out of the C++ flags before they
+# are passed to NVCC.
+#
 # # # # # # # # # # # #
 # The MIT License (MIT)
 #
@@ -32,10 +39,20 @@
 # THE SOFTWARE.
 # # # # # # # # # # # #
 #
-
 cmake_minimum_required(VERSION 3.14)
 
 include_guard(DIRECTORY)
+
+
+# List of C++ flags that we don't want to use when compiling code with CUDA.
+set(_int_add_flags_cuda_exclude
+    # If -Wmissing-declarations is passed to nvcc with -Xcompiler, we get spam warnings from
+    # <cuda_root>/bin/crt/link.stub during device link when separable compilation is being used.
+    # Observed with: CUDA 9.2, GCC 7.4.0 (Ubuntu 18.04)
+    -Wmissing-declarations
+)
+
+
 
 # Put list of enabled languages in accessible variable.
 get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
@@ -49,6 +66,7 @@ endif()
 if("Fortran" IN_LIST enabled_languages)
     include(CheckFortranCompilerFlag)
 endif()
+
 
 
 # internal helper - adds given linker flags (if accepted by linker) to given configurations.
@@ -150,7 +168,7 @@ function(_int_append_compile_flag lang flag)
             # Special handling - if CUDA is enabled as a language, all C++ flags we add should also be
             # passed through as host-compiler options to NVCC, so they get used when compiling C++ host
             # code.
-            if(do_cuda AND lang STREQUAL "CXX")
+            if(do_cuda AND lang STREQUAL "CXX" AND NOT "${flag}" IN_LIST _int_add_flags_cuda_exclude)
                 set(dest_name CMAKE_CUDA_FLAGS)
                 if(NOT config STREQUAL "NONE")
                     string(APPEND dest_name "_${config}")
