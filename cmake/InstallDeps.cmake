@@ -54,6 +54,7 @@ cmake_minimum_required(VERSION 3.14)
 include_guard(DIRECTORY)
 
 
+# READELF
 # used to extract SONAME from shared libs on ELF platforms.
 find_program(READELF
     NAMES readelf
@@ -61,6 +62,24 @@ find_program(READELF
     DOC "readelf (unix/ELF only)"
 )
 mark_as_advanced(FORCE READELF)
+
+# DUMPBIN
+# used to get DLL name from import lib on Windows.
+# (optional - will try other heuristics to guess DLL when dumpbin not available, plus the whole
+#  guessing routine is never even run if the DLL location is stored in the imported library target)
+set(dumpbin_hints)
+foreach(lang CXX C)
+    if(CMAKE_${lang}_COMPILER)
+        get_filename_component(dir "${CMAKE_${lang}_COMPILER}" DIRECTORY)
+        list(APPEND dumpbin_hints "${dir}")
+    endif()
+endforeach()
+find_program(DUMPBIN
+    NAMES dumpbin
+    HINTS ${dumpbin_hints}
+    DOC "dumpbin (Windows only)"
+)
+mark_as_advanced(FORCE DUMPBIN)
 
 
 # Helper function for _install_deps_internal: try to find .dll using path of an import lib (VS or MinGW).
@@ -73,6 +92,25 @@ function(_install_deps_get_dll_from_implib out_dll path)
     get_filename_component(imp_file "${path}" NAME)
     string(REGEX REPLACE "\.lib$" "" libname "${imp_file}")
     string(REGEX REPLACE "\.dll\.a$" "" libname "${libname}")
+
+    # If dumpbin is available, run it on the import lib to determine the DLL name.
+    set(dumpbin_name)
+    if(DUMPBIN)
+        execute_process(COMMAND ${DUMPBIN} /ARCHIVEMEMBERS ${path}
+            OUTPUT_VARIABLE dumpbin_out
+            RESULT_VARIABLE res
+            ERROR_QUIET
+            ENCODING        auto
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(res EQUAL 0)
+            string(REGEX MATCH "[: \t]+([^:\n]+\.dll)" dumpbin_out "${dumpbin_out}")
+            if(CMAKE_MATCH_1)
+                set(dumpbin_name ${CMAKE_MATCH_1})
+                string(REGEX REPLACE "[ \t]*/[0-9a-fA-F]*[ \t]*" "" dumpbin_name "${dumpbin_name}")
+            endif()
+        endif()
+    endif()
 
     # Get alternate library names by removing lib prefix, and/or d, MT, MDd, etc.
     # (These are common suffixes that indicate which visual studio build flags were used).
@@ -99,11 +137,13 @@ function(_install_deps_get_dll_from_implib out_dll path)
         list(APPEND suffixes
             64 bin64 64/bin bin/64 lib64 64/lib lib/64
             x86_64 x86_64/bin bin/x86_64 x86_64/lib lib/x86_64
+            x64 binx64 x64/bin bin/x64 libx64 x64/lib lib/x64
         )
     else()
         list(APPEND suffixes
             32 bin32 32/bin bin/32 lib32 32/lib lib/32
             x86 x86/bin bin/x86 x86/lib lib/x86
+            Win32 binWin32 Win32/bin bin/Win32 libWin32 Win32/lib lib/Win32
         )
     endif()
     list(APPEND suffixes bin lib)
@@ -111,12 +151,13 @@ function(_install_deps_get_dll_from_implib out_dll path)
     # Ask CMake to search for the DLL.
     set(CMAKE_FIND_LIBRARY_SUFFIXES .dll)
     find_library(${clibname}_DLL
-        NAMES           ${libname} ${libname_lower} ${libname_upper} ${nolibname} ${alt_names}
+        NAMES           ${dumpbin_name} ${libname} ${libname_lower} ${libname_upper} ${nolibname} ${alt_names}
         HINTS           "${imp_dir}"
                         "${root_dir}"
         NO_DEFAULT_PATH
         PATH_SUFFIXES   ${suffixes}
     )
+    mark_as_advanced(FORCE ${clibname}_DLL)
 
     # If found, set result in parent scope. Otherwise, send a fatal error message with instructions
     # on how to manually specify the DLL location.
