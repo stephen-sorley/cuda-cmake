@@ -148,6 +148,25 @@ function(_install_deps_get_paths_from_libs lib_dest runtime_dest component out_p
                 continue()
             endif()
 
+            get_target_property(is_imported ${lib} IMPORTED)
+
+            # If this is an imported library, and it has dependencies listed using properties, add
+            # them to the list of libs too. Will be processed on next invocation of this function.
+            #
+            # NOTE: this only adds deps that are import libs, filters out any paths or link flags.
+            if(is_imported)
+                foreach(prop IMPORTED_LINK_DEPENDENT_LIBRARIES INTERFACE_LINK_LIBRARIES)
+                    get_target_property(dep_libs ${lib} ${prop})
+                    if(dep_libs)
+                        foreach(lib ${dep_libs})
+                            if(lib MATCHES "[^ \t]+::[^ \t]+" AND TARGET ${lib})
+                                list(APPEND out_libs "${lib}")
+                            endif()
+                        endforeach()
+                    endif()
+                endforeach()
+            endif()
+
             # If this target isn't a shared, module, interface, or unknown imported library target, skip it silently
             # without doing anything.
             get_target_property(type ${lib} TYPE)
@@ -159,7 +178,6 @@ function(_install_deps_get_paths_from_libs lib_dest runtime_dest component out_p
             endif()
 
             # If this target isn't imported, install directly if shared or module, then skip regardless of type.
-            get_target_property(is_imported ${lib} IMPORTED)
             if(NOT is_imported)
                 if(type STREQUAL "SHARED_LIBRARY" OR type STREQUAL "MODULE_LIBRARY")
                     install(TARGETS ${lib}
@@ -171,13 +189,8 @@ function(_install_deps_get_paths_from_libs lib_dest runtime_dest component out_p
                 continue()
             endif()
 
-            # For imported interface libraries, grab the value of interface link libraries, and add the results
-            # back onto the list of libs to process on the next invocation of this function.
+            # If this was an imported interface library, nothing left to do after we read from the properties.
             if(type STREQUAL "INTERFACE_LIBRARY")
-                get_target_property(dep_libs ${lib} INTERFACE_LINK_LIBRARIES)
-                if(dep_libs)
-                    list(APPEND out_libs "${dep_libs}")
-                endif()
                 continue()
             endif()
 
@@ -383,6 +396,14 @@ function(_install_deps_internal lib_dest runtime_dest component do_copy do_insta
         lib_paths
         ${qt_import_libs}
     )
+
+    # Remove any obvious duplicates. This won't catch different symlinks that refer to the same file,
+    # or the same files installed on different calls to install_deps(). However, duplicates don't
+    # actually hurt anything, they just make cmake's output during an install noisier to look at.
+    # So, it's OK that we don't catch 100% of duplicates, since it's just to make things look nicer.
+    #
+    #   NOTE: if we wanted to catch 100% of duplicates, we could. It would just take more code.
+    list(REMOVE_DUPLICATES lib_paths)
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     # Process each library path, install to appropriate location (if not already installed).
