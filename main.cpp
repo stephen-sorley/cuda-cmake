@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     size_t N = 1<<20;
     if(argc >= 2) {
         char *str_end = nullptr;
-        size_t num = strtoll(argv[1], &str_end, 0);
+        size_t num = size_t(strtoull(argv[1], &str_end, 0));
         if(str_end > argv[1]) {
             N = num;
         }
