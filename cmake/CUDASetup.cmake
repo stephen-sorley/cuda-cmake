@@ -56,6 +56,7 @@ if(    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
     # https://docs.nvidia.com/cuda/archive/10.1/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list
     set(arch_list
         30 # Kepler
+        35 # Kepler w/ dynamic dispatch
         50 # Maxwell
         60 # Pascal
         70 # Volta
@@ -65,6 +66,7 @@ elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 9)
     # https://docs.nvidia.com/cuda/archive/9.2/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list
     set(arch_list
         30 # Kepler
+        35 # Kepler w/ dynamic dispatch
         50 # Maxwell
         60 # Pascal
         70 # Volta
@@ -280,7 +282,6 @@ int_cudasetup_find_lib(npps    needc)
 
 int_cudasetup_add_deps(TARGETS ${needc} DEPS nppc)
 
-
 # NV libraries (additional libs for very specialized uses)
 int_cudasetup_find_lib(nvblas)
 int_cudasetup_add_deps(TARGETS nvblas DEPS cublas)
@@ -348,6 +349,7 @@ int_cudasetup_add_deps(TARGETS nvjpeg_static DEPS cudart_static)
 # Add culibos to every static lib that needs it (MUST BE LAST)
 int_cudasetup_find_lib_static(culibos) # common dependency of almost all toolkit static libs
 int_cudasetup_add_deps(TARGETS ${needos} DEPS culibos)
+
 
 #message(STATUS "CUDA_all_libs = ${CUDA_all_libs}")
 #message(STATUS "CUDA_all_libs_static = ${CUDA_all_libs_static}")
