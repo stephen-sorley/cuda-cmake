@@ -135,18 +135,26 @@ function(int_cudasetup_find_lib name)
     endif()
 
     if(WIN32)
-        # On Windows, need to find the DLL.
-        file(GLOB dllfile LIST_DIRECTORIES FALSE
-            "${rootdir}/bin/${name}64_*.dll"
-            "${rootdir}/bin/${name}_*.dll"
-        )
-        if(dllfile)
-            list(GET dllfile 0 dllfile)
+        # On Windows, only use the library if we can find the DLL.
+        if(NOT DEFINED CUDA_${name}_DLL)
+            file(GLOB dllfile LIST_DIRECTORIES FALSE
+                "${rootdir}/bin/${name}64_*.dll"
+                "${rootdir}/bin/${name}_*.dll"
+                "${rootdir}/bin/${name}.dll"
+            )
+            if(dllfile)
+                list(GET dllfile 0 dllfile)
+            else()
+                message(AUTHOR_WARNING
+                    "Can't find DLL for ${CUDA_${name}_LIBRARY}, set CUDA_${name}_DLL to fix.")
+            endif()
+            set(CUDA_${name}_DLL "${dllfile}" CACHE FILEPATH "Path to DLL for ${name} library")
+            mark_as_advanced(FORCE CUDA_${name}_DLL)
         endif()
-        if(dllfile)
+        if(CUDA_${name}_DLL)
             add_library(CUDA::${name} SHARED IMPORTED GLOBAL)
             set_target_properties(CUDA::${name} PROPERTIES
-                IMPORTED_LOCATION             "${dllfile}"
+                IMPORTED_LOCATION             "${CUDA_${name}_DLL}"
                 IMPORTED_IMPLIB               "${CUDA_${name}_LIBRARY}"
                 INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
             )
