@@ -52,6 +52,10 @@ if(NOT CMAKE_CUDA_COMPILER_VERSION)
     return()
 endif()
 
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "CUDASetup only supports 64-bit builds.")
+endif()
+
 if(    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
     # https://docs.nvidia.com/cuda/archive/10.1/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list
     set(arch_list
@@ -121,12 +125,15 @@ foreach(incdir ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 endforeach()
 
 # Find additional CUDA libraries.
-get_filename_component(rootdir "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}" DIRECTORY) #parse off "include/" from end of path
+foreach(incdir ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+    get_filename_component(incdir "${incdir}" DIRECTORY) #parse off "include/" from end of path.
+    list(APPEND rootdirs "${incdir}")
+endforeach()
 
 set(CUDA_all_libs)
 function(int_cudasetup_find_lib name)
     find_library(CUDA_${name}_LIBRARY ${name}
-        HINTS         "${rootdir}"
+        HINTS         ${rootdirs}
         PATH_SUFFIXES lib/x64 lib64 lib
     )
     mark_as_advanced(FORCE CUDA_${name}_LIBRARY)
@@ -137,14 +144,19 @@ function(int_cudasetup_find_lib name)
     if(WIN32)
         # On Windows, only use the library if we can find the DLL.
         if(NOT DEFINED CUDA_${name}_DLL)
-            file(GLOB dllfile LIST_DIRECTORIES FALSE
-                "${rootdir}/bin/${name}64_*.dll"
-                "${rootdir}/bin/${name}_*.dll"
-                "${rootdir}/bin/${name}.dll"
-            )
+            set(glob_paths)
+            foreach(dir ${rootdirs})
+                list(APPEND glob_paths
+                    "${dir}/bin/${name}64_*.dll"
+                    "${dir}/bin/${name}_*.dll"
+                    "${dir}/bin/${name}.dll"
+                )
+            endforeach()
+            file(GLOB dllfile LIST_DIRECTORIES FALSE ${glob_paths})
             if(dllfile)
                 list(GET dllfile 0 dllfile)
             else()
+                set(dllfile)
                 message(AUTHOR_WARNING
                     "Can't find DLL for ${CUDA_${name}_LIBRARY}, set CUDA_${name}_DLL to fix.")
             endif()
@@ -181,7 +193,7 @@ function(int_cudasetup_find_lib_static name)
     set(CMAKE_FIND_LIBRARY_PREFIXES "${CMAKE_STATIC_LIBRARY_PREFIX}")
     set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_STATIC_LIBRARY_SUFFIX}")
     find_library(CUDA_${name}_LIBRARY ${name}
-        HINTS         "${rootdir}"
+        HINTS         ${rootdirs}
         PATH_SUFFIXES lib/x64 lib64 lib
     )
     mark_as_advanced(FORCE CUDA_${name}_LIBRARY)
