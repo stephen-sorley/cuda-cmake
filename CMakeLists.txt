@@ -34,6 +34,7 @@ project(CudaExample
     LANGUAGES CXX CUDA
 )
 
+include(IDESetup)
 include(InstallDeps)
 
 

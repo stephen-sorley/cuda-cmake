@@ -10,6 +10,8 @@
 # Collect all build artifacts in standard subdirs (bin and lib), instead of having them
 # scattered all over the build directory.
 #
+# Stores list of build types in PROJECTSETUP_BUILD_TYPES.
+#
 # # # # # # # # # # # #
 # The MIT License (MIT)
 #
@@ -58,15 +60,8 @@ set(build_types
     RelWithDebInfo
     Debug
 )
+set(PROJECTSETUP_BUILD_TYPES ${build_types}) # Fancy variable name for use outside this file.
 
-# If we're targeting a multi-config generator like Visual Studio or XCode, all we need to do
-# is pass it our list of build types, and we're done.
-if(CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_CONFIGURATION_TYPES "${build_types}" CACHE STRING "Build types available to use in IDE")
-    return()
-endif()
-
-# If we reach here, we're targeting a normal single-config generator.
 
 # If the user requested a particular build type when they invoked CMake, and it's on the list, use that.
 # Otherwise, use the default build type (first in the list).
@@ -96,6 +91,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
+
+# Add any extra path hints to help the project() command find compiler executables.
 list(APPEND CMAKE_PREFIX_PATH
     /usr/local/cuda # Default cuda install location when using nvidia's Linux .run installer.
 )
