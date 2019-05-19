@@ -60,7 +60,6 @@ set(CMAKE_LINK_DEPENDS_NO_SHARED TRUE)
 get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
 foreach(lang ${enabled_languages})
     set(CMAKE_${lang}_VISIBILITY_PRESET hidden)
-    message(STATUS "CMAKE_${lang}_VISIBILITY_PRESET = ${CMAKE_${lang}_VISIBILITY_PRESET}") #DEBUG_161
 endforeach()
 set(CMAKE_VISIBILITY_INLINES_HIDDEN TRUE)
 
