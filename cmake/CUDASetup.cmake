@@ -9,16 +9,36 @@
 # Searches for CUDA libraries (cublas, cusolver, etc.) from the CUDA toolkit, and provides imported
 # targets for them if found.
 #
-# The oldest CUDA toolkit supported by this file is CUDA 9.
+# Imported libs (only most commonly used ones, see bottom section of file for exhaustive list):
+#   CUDA::cudart
+#   CUDA::cublas
+#   CUDA::cufft
+#   CUDA::curand
+#   CUDA::cusparse
+#   CUDA::cusolver
+#   CUDA::npp{c,ial,icc,icom,idei,if,ig,im,ist,isu,itc,s}
+#   CUDA::nvgraph
+#   CUDA::nvjpeg
 #
-# WARNING:
-# The lists of supported architectures must be manually updated whenever a new toolkit is released.
+# If not on Windows, static versions of these import libraries are usually also available, just
+# add '_static' suffix to name (e.g., CUDA::cublas_static).
+#
+# On Windows, as of CUDA 10 the only static lib available is CUDA::cudart_static, everything else
+# is shared only.
 #
 # Options:
 #   CUDA_MIN_ARCH: minimum architecture to support (default: minimum version allowed by CUDA toolkit)
 #   CUDA_MAX_ARCH: maximum architecture to support (default: maximum version allowed by CUDA toolkit)
+#   CUDASETUP_VERBOSE: set to TRUE to show messages useful for debugging problems (default: FALSE)
 #
-# Current CUDA release when file was last updated: 10.1 Update 1
+# WARNING:
+# The lists of supported architectures must be manually updated whenever a new toolkit is released.
+# You may also need to update the list of support libs at the bottom of the file, though these change
+# less often.
+#
+# The oldest CUDA toolkit supported by this file: 9.0
+#
+# The newest CUDA toolkit available when last updated: 10.1 Update 1
 #
 # # # # # # # # # # # #
 # The MIT License (MIT)
@@ -43,7 +63,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 # # # # # # # # # # # #
-
+#
 cmake_minimum_required(VERSION 3.14)
 
 include_guard(DIRECTORY)
@@ -55,6 +75,8 @@ endif()
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR "CUDASetup only supports 64-bit builds.")
 endif()
+
+
 
 if(    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 10)
     # https://docs.nvidia.com/cuda/archive/10.1/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list
@@ -78,6 +100,11 @@ elseif(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 9)
 else()
     message(FATAL_ERROR "Current CUDA version (${CMAKE_CUDA_COMPILER_VERSION}) it too old, minimum allowed is 9.0")
 endif()
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Code to handle arch selection, and any extra flags besides the CXX flags added in AddFlags.cmake
 
 # Allow user to select minimum and maximum supported architectures.
 # Default to covering the entire list of arch's supported by this version of CUDA.
@@ -124,13 +151,23 @@ foreach(incdir ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
     string(APPEND CMAKE_CUDA_FLAGS " -isystem \"${incdir}\"")
 endforeach()
 
-# Find additional CUDA libraries.
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Helper functions for finding CUDA libraries.
+
+# Calculate which dirs to search for libs in, from the CUDA include dirs already set by CMake.
+set(rootdirs)
 foreach(incdir ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
     get_filename_component(incdir "${incdir}" DIRECTORY) #parse off "include/" from end of path.
     list(APPEND rootdirs "${incdir}")
 endforeach()
 
-set(CUDA_all_libs)
+# Find the shared CUDA library with the given core name (cublas, cufft, etc).
+# If found, create an imported target for it, then add the core name to CUDA_all_libs_shared.
+#   name: name of library, without lib prefix or suffix, and without 'CUDA::'.
+#   ARGN: names of any additional variables to add the core name to (optional)
+set(CUDA_all_libs_shared)
 function(int_cudasetup_find_lib name)
     find_library(CUDA_${name}_LIBRARY ${name}
         HINTS         ${rootdirs}
@@ -142,14 +179,14 @@ function(int_cudasetup_find_lib name)
     endif()
 
     if(WIN32)
-        # On Windows, only use the library if we can find the DLL.
+        # On Windows, only use the library if we can also find the DLL (not just the import lib).
         if(NOT DEFINED CUDA_${name}_DLL)
             set(glob_paths)
             foreach(dir ${rootdirs})
                 list(APPEND glob_paths
-                    "${dir}/bin/${name}64_*.dll"
-                    "${dir}/bin/${name}_*.dll"
-                    "${dir}/bin/${name}.dll"
+                    "${dir}/bin/${name}64_*.dll" # Name scheme used in CUDA 9 and 10.
+                    "${dir}/bin/${name}_*.dll"   # Alternate name scheme (for future-proofing).
+                    "${dir}/bin/${name}.dll"     # Alternate name scheme (for future-proofing).
                 )
             endforeach()
             file(GLOB dllfile LIST_DIRECTORIES FALSE ${glob_paths})
@@ -179,15 +216,20 @@ function(int_cudasetup_find_lib name)
         )
     endif()
 
+    # If we successfully found the library, add the name to CUDA_all_libs_shared, and to any other
+    # variable names that the caller passed in.
     if(TARGET CUDA::${name})
-        set(varnames CUDA_all_libs ${ARGN})
-        foreach(varname ${varnames})
+        foreach(varname CUDA_all_libs_shared ${ARGN})
             list(APPEND ${varname} ${name})
             set(${varname} "${${varname}}" PARENT_SCOPE)
         endforeach()
     endif()
 endfunction()
 
+# Find the static CUDA library with the given core name (cublas_static, cufft_static, etc).
+# If found, create an imported target for it, then add the core name to CUDA_all_libs_static.
+#   name: name of library, without lib prefix or suffix, and without 'CUDA::'.
+#   ARGN: names of any additional variables to add the core name to (optional)
 set(CUDA_all_libs_static)
 function(int_cudasetup_find_lib_static name)
     set(CMAKE_FIND_LIBRARY_PREFIXES "${CMAKE_STATIC_LIBRARY_PREFIX}")
@@ -207,32 +249,41 @@ function(int_cudasetup_find_lib_static name)
         INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
     )
 
+    # If we successfully found the library, add the name to CUDA_all_libs_static, and to any other
+    # variable names that the caller passed in.
     if(TARGET CUDA::${name})
-        set(varnames CUDA_all_libs_static ${ARGN})
-        foreach(varname ${varnames})
+        foreach(varname CUDA_all_libs_static ${ARGN})
             list(APPEND ${varname} ${name})
             set(${varname} "${${varname}}" PARENT_SCOPE)
         endforeach()
     endif()
 endfunction()
 
-#(TARGETS <list of targets> DEPS <list of deps, all appended to each target's properties>)
+# For each of the given CUDA libraries, add all the given libraries as dependencies (link and install).
+# Both NAMES and DEPS should be given CUDA library core names (cufft, cublas_static, etc).
+#
+# int_cudasetup_add_deps(NAMES <CUDA lib names> DEPS <dependencies (also CUDA lib names)>)
 function(int_cudasetup_add_deps)
-    cmake_parse_arguments(arg "" "" "TARGETS;DEPS" ${ARGN})
+    cmake_parse_arguments(arg "" "" "NAMES;DEPS" ${ARGN})
 
-    if((NOT arg_TARGETS) OR (NOT arg_DEPS))
+    if((NOT arg_NAMES) OR (NOT arg_DEPS))
         return()
     endif()
-    list(TRANSFORM arg_TARGETS PREPEND "CUDA::")
+
+    # Convert core libnames in both lists into their corresponding imported target names.
+    list(TRANSFORM arg_NAMES PREPEND "CUDA::")
     list(TRANSFORM arg_DEPS PREPEND "CUDA::")
 
-    set(targets)
-    foreach(target ${arg_TARGETS})
-        if(TARGET ${target})
-            list(APPEND targets ${target})
+    # Filter out & ignore any bad names or libraries we couldn't find.
+    set(names)
+    foreach(name ${arg_NAMES})
+        if(TARGET ${name})
+            list(APPEND names ${name})
         endif()
     endforeach()
 
+    # Filter out & ignore any bad names or libraries we couldn't find. Also, separate shared and
+    # static dependencies out into their own lists (they're handled differently).
     set(static_deps)
     set(shared_deps)
     foreach(dep ${arg_DEPS})
@@ -246,17 +297,39 @@ function(int_cudasetup_add_deps)
         endif()
     endforeach()
 
+    # Shared library dependencies get added to IMPORTED_LINK_DEPENDENT_LIBRARIES - not linked to
+    # directly, but will help CMake determine proper RPATH's, and will cause the dependency to be
+    # automatically installed by InstallDeps.cmake.
     if(shared_deps)
-        set_property(TARGET ${targets} APPEND PROPERTY
+        set_property(TARGET ${names} APPEND PROPERTY
             IMPORTED_LINK_DEPENDENT_LIBRARIES ${shared_deps}
         )
     endif()
+
+    # Static library dependencies get added to INTERFACE_LINK_LIBRARIES, so they're explicitly
+    # linked right after the library that depends on them. InstallDeps.cmake will see these
+    # dependencies, but will leave them out of the install because they're static libraries.
     if(static_deps)
-        set_property(TARGET ${targets} APPEND PROPERTY
+        set_property(TARGET ${names} APPEND PROPERTY
             INTERFACE_LINK_LIBRARIES ${static_deps}
         )
     endif()
+
+    # For debugging:
+    if(CUDASETUP_VERBOSE)
+        message(STATUS "${names} deps_shared=${shared_deps} deps_static=${static_deps}")
+    endif()
 endfunction()
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Find CUDA runtime libraries.
+
+# Shared CUDA runtime. No real reason to use this, the static version should be preferred. One
+# possible use is if you are linking to a third-party (not nvidia) CUDA library that was built
+# against the shared runtime, and you need to install the shared runtime as part of deployment.
+int_cudasetup_find_lib(cudart)
 
 # Static CUDA runtime. Only need to explicitly link to this if you're calling CUDA API or library
 # functions from a pure C++ library or application. If at least one file in the target is a CUDA
@@ -273,6 +346,11 @@ if(TARGET CUDA::cudart_static AND NOT WIN32)
     )
 endif()
 
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Find CUDA support libraries (stuff like cuBLAS, cuFFT, etc).
+
 # CU libraries (these are the most commonly used ones).
 int_cudasetup_find_lib(cublas)
 int_cudasetup_find_lib(cublasLt)
@@ -282,8 +360,8 @@ int_cudasetup_find_lib(curand)
 int_cudasetup_find_lib(cusolver)
 int_cudasetup_find_lib(cusparse)
 
-int_cudasetup_add_deps(TARGETS cublas DEPS cublasLt)
-int_cudasetup_add_deps(TARGETS cufftw DEPS cufft)
+int_cudasetup_add_deps(NAMES cublas DEPS cublasLt)
+int_cudasetup_add_deps(NAMES cufftw DEPS cufft)
 
 # NPP (NVIDIA Performance Primitives)
 set(needc)
@@ -300,25 +378,25 @@ int_cudasetup_find_lib(nppisu  needc)
 int_cudasetup_find_lib(nppitc  needc)
 int_cudasetup_find_lib(npps    needc)
 
-int_cudasetup_add_deps(TARGETS ${needc} DEPS nppc)
+int_cudasetup_add_deps(NAMES ${needc} DEPS nppc)
 
 # NV libraries (additional libs for very specialized uses)
 int_cudasetup_find_lib(nvblas)
-int_cudasetup_add_deps(TARGETS nvblas DEPS cublas)
+int_cudasetup_add_deps(NAMES nvblas DEPS cublas)
 
 int_cudasetup_find_lib(nvgraph)
 set(deps curand cusolver)
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 10.1)
     list(APPEND deps cublas cusparse)
 endif()
-int_cudasetup_add_deps(TARGETS nvgraph DEPS ${deps})
+int_cudasetup_add_deps(NAMES nvgraph DEPS ${deps})
 
 int_cudasetup_find_lib(nvjpeg)
 int_cudasetup_find_lib(nvToolsExt)
 
 
 # Static versions of everything (not available on Windows as of CUDA 10.1)
-set(needos) #add libs to here that need to be linked to the culibos library.
+set(needos) #add libs to here that need to be linked to the culibos static library.
 
 # CU static libs
 set(solver_deps)
@@ -334,9 +412,9 @@ int_cudasetup_find_lib_static(cusparse_static         needos solver_deps)
 int_cudasetup_find_lib_static(lapack_static                  solver_deps)
 int_cudasetup_find_lib_static(metis_static                   solver_deps)
 
-int_cudasetup_add_deps(TARGETS cublas_static   DEPS cublasLt_static)
-int_cudasetup_add_deps(TARGETS cufftw_static   DEPS cufft_static)
-int_cudasetup_add_deps(TARGETS cusolver_static DEPS ${solver_deps})
+int_cudasetup_add_deps(NAMES cublas_static   DEPS cublasLt_static)
+int_cudasetup_add_deps(NAMES cufftw_static   DEPS cufft_static)
+int_cudasetup_add_deps(NAMES cusolver_static DEPS ${solver_deps})
 
 # NPP static libs
 set(needc)
@@ -353,7 +431,7 @@ int_cudasetup_find_lib_static(nppisu_static  needc)
 int_cudasetup_find_lib_static(nppitc_static  needc)
 int_cudasetup_find_lib_static(npps_static    needc)
 
-int_cudasetup_add_deps(TARGETS ${needc} DEPS nppc_static)
+int_cudasetup_add_deps(NAMES ${needc} DEPS nppc_static)
 
 # NV static libs
 int_cudasetup_find_lib(nvgraph_static)
@@ -361,15 +439,17 @@ set(deps curand_static cusolver_static)
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 10.1)
     list(APPEND deps cublas_static cusparse_static)
 endif()
-int_cudasetup_add_deps(TARGETS nvgraph_static DEPS ${deps})
+int_cudasetup_add_deps(NAMES nvgraph_static DEPS ${deps})
 
 int_cudasetup_find_lib(nvjpeg_static)
-int_cudasetup_add_deps(TARGETS nvjpeg_static DEPS cudart_static)
+int_cudasetup_add_deps(NAMES nvjpeg_static DEPS cudart_static)
 
 # Add culibos to every static lib that needs it (MUST BE LAST)
 int_cudasetup_find_lib_static(culibos) # common dependency of almost all toolkit static libs
-int_cudasetup_add_deps(TARGETS ${needos} DEPS culibos)
+int_cudasetup_add_deps(NAMES ${needos} DEPS culibos)
 
-
-#message(STATUS "CUDA_all_libs = ${CUDA_all_libs}")
-#message(STATUS "CUDA_all_libs_static = ${CUDA_all_libs_static}")
+# For debugging:
+if(CUDASETUP_VERBOSE)
+    message(STATUS "CUDA_all_libs_shared = ${CUDA_all_libs_shared}")
+    message(STATUS "CUDA_all_libs_static = ${CUDA_all_libs_static}")
+endif()
