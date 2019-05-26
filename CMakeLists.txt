@@ -63,15 +63,27 @@ add_executable(cudatest
     test.cu
 )
 
+add_executable(test_cublas
+    test_cublas.cpp
+)
+target_link_libraries(test_cublas PRIVATE
+    CUDA::cublas
+    CUDA::cudart_static
+)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Install rules.
-install(TARGETS cudatest
+install(TARGETS
+    cudatest
+    test_cublas
+
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
 )
 
-#install_deps(lib bin  ....)
+install_deps(lib bin
+    CUDA::cublas
+)
 
 install_deps_system(lib bin)
 
