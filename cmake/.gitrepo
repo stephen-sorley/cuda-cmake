@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/stephen-sorley/cmake-common.git
 	branch = master
-	commit = e3ec2b780108ede75dab77a5eed017f5cb54b426
+	commit = a6b38bd2ee415db32a8f7ebceac87aca936561e2
 	method = merge
 	cmdver = 0.4.0
-	parent = 282378554a800a6ee16bad0d95d725a0049ba744
+	parent = c9285f1156b6f0dc5c8a210ff1a81ac6cffeda09
