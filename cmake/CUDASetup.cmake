@@ -204,7 +204,7 @@ function(int_cudasetup_find_lib name)
             mark_as_advanced(FORCE CUDA_${name}_DLL)
         endif()
         if(CUDA_${name}_DLL)
-            add_library(CUDA::${name} SHARED IMPORTED GLOBAL)
+            add_library(CUDA::${name} SHARED IMPORTED)
             set_target_properties(CUDA::${name} PROPERTIES
                 IMPORTED_LOCATION             "${CUDA_${name}_DLL}"
                 IMPORTED_IMPLIB               "${CUDA_${name}_LIBRARY}"
@@ -212,7 +212,7 @@ function(int_cudasetup_find_lib name)
             )
         endif()
     else()
-        add_library(CUDA::${name} SHARED IMPORTED GLOBAL)
+        add_library(CUDA::${name} SHARED IMPORTED)
         set_target_properties(CUDA::${name} PROPERTIES
             IMPORTED_LOCATION             "${CUDA_${name}_LIBRARY}"
             INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
@@ -246,7 +246,7 @@ function(int_cudasetup_find_lib_static name)
         return()
     endif()
 
-    add_library(CUDA::${name} STATIC IMPORTED GLOBAL)
+    add_library(CUDA::${name} STATIC IMPORTED)
     set_target_properties(CUDA::${name} PROPERTIES
         IMPORTED_LOCATION             "${CUDA_${name}_LIBRARY}"
         INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
