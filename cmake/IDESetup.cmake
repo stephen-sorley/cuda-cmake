@@ -36,7 +36,8 @@ include_guard(DIRECTORY)
 
 # If we aren't targeting a multi-config generator like Visual Studio or XCode, return without
 # doing anything.
-if(NOT CMAKE_CONFIGURATION_TYPES)
+get_property(int_idesetup_is_multi GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT int_idesetup_is_multi)
     return()
 endif()
 
