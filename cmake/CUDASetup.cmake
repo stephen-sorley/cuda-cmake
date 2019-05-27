@@ -156,12 +156,14 @@ endforeach()
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Helper functions for finding CUDA libraries.
 
-# Calculate which dirs to search for libs in, from the CUDA include dirs already set by CMake.
-set(rootdirs)
+# Calculate which dirs to search for libs in, from the CUDA compiler and include dirs CMake found.
+get_filename_component(bindir "${CMAKE_CUDA_COMPILER}" DIRECTORY)
+string(REGEX REPLACE "/+[x648_]*bin[x648_]*(/.*|$)" "" rootdirs "${bindir}")
 foreach(incdir ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-    get_filename_component(incdir "${incdir}" DIRECTORY) #parse off "include/" from end of path.
+    string(REGEX REPLACE "/include(/.*|$)" "" incdir "${incdir}")
     list(APPEND rootdirs "${incdir}")
 endforeach()
+list(REMOVE_DUPLICATES rootdirs)
 
 # Find the shared CUDA library with the given core name (cublas, cufft, etc).
 # If found, create an imported target for it, then add the core name to CUDA_all_libs_shared.
@@ -180,7 +182,7 @@ function(int_cudasetup_find_lib name)
 
     if(WIN32)
         # On Windows, only use the library if we can also find the DLL (not just the import lib).
-        if(NOT DEFINED CUDA_${name}_DLL)
+        if(NOT CUDA_${name}_DLL)
             set(glob_paths)
             foreach(dir ${rootdirs})
                 list(APPEND glob_paths
@@ -189,15 +191,16 @@ function(int_cudasetup_find_lib name)
                     "${dir}/bin/${name}.dll"     # Alternate name scheme (for future-proofing).
                 )
             endforeach()
+
             file(GLOB dllfile LIST_DIRECTORIES FALSE ${glob_paths})
             if(dllfile)
                 list(GET dllfile 0 dllfile)
             else()
-                set(dllfile)
+                set(dllfile "CUDA_${name}_DLL-NOTFOUND")
                 message(AUTHOR_WARNING
                     "Can't find DLL for ${CUDA_${name}_LIBRARY}, set CUDA_${name}_DLL to fix.")
             endif()
-            set(CUDA_${name}_DLL "${dllfile}" CACHE FILEPATH "Path to DLL for ${name} library")
+            set(CUDA_${name}_DLL "${dllfile}" CACHE FILEPATH "Path to DLL for ${name} library" FORCE)
             mark_as_advanced(FORCE CUDA_${name}_DLL)
         endif()
         if(CUDA_${name}_DLL)
