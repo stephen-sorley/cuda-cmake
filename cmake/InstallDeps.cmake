@@ -46,6 +46,28 @@
 #   If TRUE (the default), any DLL's installed with install_deps will also be copied to the build
 #   directory (specifically, to CMAKE_RUNTIME_OUTPUT_DIR). Set to FALSE to disable DLL copies.
 #
+# INSTALL_DEPS_AUTO_MODE [NONE|{LIMITED}|ALL]
+#   Determines how install_deps() will handle any additional dependencies listed in the
+#   IMPORTED_LINK_DEPENDENT_LIBRARIES or INTERFACE_LINK_LIBRARIES properties of the import libs
+#   that were explicitly passed in. Note that these properties are recursively expanded out to
+#   their fullest extent (so deps of deps of deps can be pulled in).
+#      NONE: only the libs explicitly passed into install_deps() will be installed.
+#      LIMITED: any additional deps that are import libs with the same namespace as one of the
+#               explicitly passed-in libraries are installed.
+#      ALL: all additional deps that are import libs are installed, regardless of namespace.
+#
+#   For example, let's say you called install_deps(Qt5::Widgets), and Qt5::Widgets has Qt5::Core
+#   and OpenSSL::OpenSSL listed in its INTERFACE_LINK_LIBRARIES property. Furthermore, let's say
+#   OpenSSL::OpenSSL has ZLIB::ZLIB listed in its INTERFACE_LINK_LIBRARIES property.  So our
+#   dependency graph looks like this:
+#       Qt5::Widgets -> Qt5::Core
+#                    -> OpenSSL::OpenSSL -> ZLIB::ZLIB
+#   If mode is NONE, only Qt5::Widgets is installed.
+#   If mode is LIMITED, Qt5::Widgets and Qt5::Core are installed.
+#   If mode is ALL, Qt5::Widgets, Qt5::Core, OpenSSL::OpenSSL, and ZLIB::ZLIB are installed.
+#
+#   "LIMITED" is the default behavior.
+#
 # # # # # # # # # # # #
 # This file was originally adapted from the mstdlib project (also MIT licensed), found here:
 #   https://github.com/Monetra/mstdlib/blob/master/CMakeModules/InstallDepLibs.cmake
@@ -198,7 +220,15 @@ endfunction()
 
 
 # Helper function for _install_deps_internal: convert given list of libs into file paths.
-function(_install_deps_get_paths_from_libs lib_dest runtime_dest component out_paths_name out_libs_name)
+function(_install_deps_get_paths_from_libs lib_dest runtime_dest component out_paths_name out_libs_name prefixes_name)
+    set(automode LIMITED)
+    if(INSTALL_DEPS_AUTO_MODE)
+        string(TOUPPER "${INSTALL_DEPS_AUTO_MODE}" automode)
+        if(NOT (INSTALL_DEPS_AUTO_MODE STREQUAL "NONE" OR INSTALL_DEPS_AUTO_MODE STREQUAL "ALL"))
+            set(automode LIMITED)
+        endif()
+    endif()
+
     set(out_libs)
     foreach(lib IN LISTS ${out_libs_name})
         # Skip empty list elements, as well as "optimized" and "debug" keywords that might be in a <NAME>_LIBRARIES variable.
@@ -221,13 +251,15 @@ function(_install_deps_get_paths_from_libs lib_dest runtime_dest component out_p
             # them to the list of libs too. Will be processed on next invocation of this function.
             #
             # NOTE: this only adds deps that are import libs, filters out any paths or link flags.
-            if(is_imported)
+            if(is_imported AND NOT automode STREQUAL "NONE")
                 foreach(prop IMPORTED_LINK_DEPENDENT_LIBRARIES INTERFACE_LINK_LIBRARIES)
                     get_target_property(dep_libs ${lib} ${prop})
                     if(dep_libs)
                         foreach(lib ${dep_libs})
-                            if(lib MATCHES "[^ \t]+::[^ \t]+" AND TARGET ${lib})
-                                list(APPEND out_libs "${lib}")
+                            if(lib MATCHES "([^ \t:]+)::[^ \t]+" AND TARGET ${lib})
+                                if(automode STREQUAL "ALL" OR "${CMAKE_MATCH_1}" IN_LIST ${prefixes_name})
+                                    list(APPEND out_libs "${lib}")
+                                endif()
                             endif()
                         endforeach()
                     endif()
@@ -438,22 +470,36 @@ function(_install_deps_internal lib_dest runtime_dest component do_copy do_insta
         set(runtime_dest bin)
     endif()
 
-    # If any Qt import libraries were passed in, save them in a separate list.
+    set(libs ${ARGN})
+
     set(qt_import_libs)
+    set(prefixes)
     foreach(lib IN LISTS libs)
+        if(NOT TARGET ${lib})
+            continue()
+        endif()
+
+        # If any Qt import libraries were passed in, save them in a separate list.
         if(lib MATCHES "Qt[0-9]+::")
             list(APPEND qt_import_libs "${lib}")
         endif()
+
+        # Get list of import lib prefixes (used to support LIMITED auto mode).
+        if(lib MATCHES "([^: \t]+)::[^ \t]+")
+            list(APPEND prefixes "${CMAKE_MATCH_1}")
+        endif()
     endforeach()
+    list(REMOVE_DUPLICATES qt_import_libs)
+    list(REMOVE_DUPLICATES prefixes)
 
     # Convert list of libraries into a list of library paths. Will resolve any alias libraries,
     # import libs, and import lib dependencies into full paths. Will also filter out unwanted
     # stuff like static library targets.
-    set(libs ${ARGN})
     while(libs)
         _install_deps_get_paths_from_libs("${lib_dest}" "${runtime_dest}" "${component}"
             lib_paths
             libs
+            prefixes
         )
     endwhile()
 
