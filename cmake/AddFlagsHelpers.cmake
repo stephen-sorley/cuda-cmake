@@ -53,21 +53,9 @@ set(_int_add_flags_cuda_exclude
 )
 
 
-
-# Put list of enabled languages in accessible variable.
-get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
-
-if("C" IN_LIST enabled_languages)
-    include(CheckCCompilerFlag)
-endif()
-if("CXX" IN_LIST enabled_languages)
-    include(CheckCXXCompilerFlag)
-endif()
-if("Fortran" IN_LIST enabled_languages)
-    include(CheckFortranCompilerFlag)
-endif()
-
-
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
+include(CheckFortranCompilerFlag)
 
 # internal helper - adds given linker flags (if accepted by linker) to given configurations.
 # _int_add_flags_linker(FLAGS <linker flags> [CONFIGS <linker target types>])
@@ -89,6 +77,8 @@ function(_int_add_flags_linker)
     else()
         list(TRANSFORM ${arg_CONFIGS} TOUPPER)
     endif()
+
+    get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
 
     foreach(flag ${arg_FLAGS})
         # Check to see if linker flag is supported (use C if enabled, or CXX if enabled, or Fortran if enabled).
@@ -198,6 +188,8 @@ function(_int_add_flags_compiler)
         return()
     endif()
 
+    get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+
     # Filter out langs that aren't enabled.
     set(temp_langs "${arg_LANGS}")
     set(arg_LANGS)
@@ -268,6 +260,8 @@ function(_int_add_flag_options_compiler)
     if(NOT arg_FLAG_OPTIONS)
         return()
     endif()
+
+    get_property(enabled_languages GLOBAL PROPERTY ENABLED_LANGUAGES)
 
     # Filter out langs that aren't enabled.
     set(temp_langs "${arg_LANGS}")
